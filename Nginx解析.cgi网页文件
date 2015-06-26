@@ -1,0 +1,1049 @@
+说明：
+
+操作系统：CentOS 6.x
+
+web环境：php+nginx+mysql
+
+nginx安装目录：/usr/local/nginx
+
+nginx配置文件：/usr/local/nginx/conf/nginx.conf
+
+nginx默认站点目录：/usr/local/nginx/html/
+
+需求：让nginx能够解析.cgi后缀的文件
+
+具体操作：
+
+一、安装perl-fcgi依赖包，通过安装perl-fcgi来支持nginx运行.cgi
+
+[root@zabbix ~]# yum install perl-CPAN perl-ExtUtils-CBuilder perl-ExtUtils-MakeMaker
+
+二、安装perl
+[root@zabbix ~]#cd /usr/local/src
+[root@zabbix src]# tar -zxf perl-5.20.0.tar.gz 
+[root@zabbix src]# cd perl-5.20.0
+[root@zabbix perl-5.20.0]# ./Configure -des -Dprefix=/usr/local/perl
+[root@zabbix perl-5.20.0]# make && make install
+[root@zabbix perl-5.20.0]# mv /usr/bin/perl /usr/bin/perl.bak  #备份系统默认的perl
+[root@zabbix perl-5.20.0]# ln -s /usr/local/perl/bin/perl /usr/bin/perl  #把刚才安装好的新perl软链接到perl
+在系统中的默认位置
+[root@zabbix perl-5.20.0]# perl -v   #查看perl版本
+
+This is perl 5, version 20, subversion 0 (v5.20.0) built for x86_64-linux
+
+Copyright 1987-2014, Larry Wall
+
+Perl may be copied only under the terms of either the Artistic License or the
+GNU General Public License, which may be found in the Perl 5 source kit.
+
+Complete documentation for Perl, including FAQ lists, should be found on
+this system using "man perl" or "perldoc perl".  If you have access to the
+Internet, point your browser at http://www.perl.org/, the Perl Home Page.
+
+
+三、安装perl支持模块
+
+1、安装perl fcgi模块
+[root@zabbix ~]# cd /usr/local/src/
+[root@zabbix src]# tar -zxf FCGI-0.74.tar.gz 
+[root@zabbix src]# cd FCGI-0.74
+[root@zabbix FCGI-0.74]# perl Makefile.PL 
+[root@zabbix FCGI-0.74]# make && make install
+
+2、安装FCGI-ProManager模块
+[root@zabbix src]# tar -zxf FCGI-ProcManager-0.24.tar.gz 
+[root@zabbix src]# cd FCGI-ProcManager-0.24
+[root@zabbix FCGI-ProcManager-0.24]# perl Makefile.PL 
+Checking if your kit is complete...
+Looks good
+Writing Makefile for FCGI::ProcManager
+[root@zabbix FCGI-ProcManager-0.24]# make && make install 
+
+3、安装IO模块
+[root@zabbix src]# tar -zxf IO-1.25.tar.gz 
+[root@zabbix src]# cd IO-1.25
+[root@zabbix IO-1.25]# perl Makefile.PL 
+Checking if your kit is complete...
+Looks good
+Writing Makefile for IO
+[root@zabbix IO-1.25]# make && make install
+
+4、安装IO::ALL模块
+[root@zabbix src]# tar -zxf IO-All-0.79.tar.gz 
+[root@zabbix src]# cd IO-All-0.79
+[root@zabbix IO-All-0.79]# perl Makefile.PL 
+Checking if your kit is complete...
+Looks good
+Writing Makefile for IO::All
+[root@zabbix IO-All-0.79]# make && make install
+
+四、配置nginx支持.cgi、
+
+[root@zabbix ~]# vim /usr/local/nginx/perl-fcgi.pl
+
+#!/usr/bin/perl
+
+#
+
+# author Daniel Dominik Rudnicki
+
+# thanks to: Piotr Romanczuk
+
+# email daniel@sardzent.org
+# version 0.4.3
+
+# webpage http://www.nginx.eu/
+
+#
+
+# BASED @ http://wiki.codemongers.com/NginxSimpleCGI
+
+#
+
+#
+
+# use strict;
+
+use FCGI;
+
+use Getopt::Long;
+
+use IO::All;
+
+use Socket;
+
+sub init {
+
+GetOptions( "h" => \$help,
+
+"verbose!"=>\$verbose,
+
+"pid=s" => \$filepid,
+
+"l=s" => \$logfile,
+
+"S:s" => \$unixsocket,
+
+"P:i" => \$unixport) or usage();
+
+usage() if $help;
+
+print " Starting Nginx-fcgi\n" if $verbose;
+
+print " Running with $> UID" if $verbose;
+
+print " Perl $]" if $verbose;
+
+if ( $> == "0" ) {
+
+print "\n\tERROR\tRunning as a root!\n";
+
+print "\tSuggested not to do so !!!\n\n";
+
+exit 1;
+
+}
+
+if ( ! $logfile ) {
+
+print "\n\tERROR\t log file must declared\n"
+
+. "\tuse $0 with option -l filename\n\n";
+
+exit 1;
+
+}
+
+print " Using log file $logfile\n" if $verbose;
+
+"\n\n" >> io($logfile);
+
+addlog($logfile, "Starting Nginx-cfgi");
+
+addlog($logfile, "Running with $> UID");
+
+addlog($logfile, "Perl $]");
+
+addlog($logfile, "Testing socket options");
+
+if ( ($unixsocket && $unixport) || (!($unixsocket) && !($unixport)) ) {
+
+print "\n\tERROR\tOnly one option can be used!\n";
+
+print "\tSuggested (beacuse of speed) is usage UNIX socket -S \n\n";
+
+exit 1;
+
+}
+
+if ($unixsocket) {
+
+print " Daemon listening at UNIX socket $unixsocket\n" if $versbose;
+
+addlog($logfile, "Deamon listening at UNIX socket $unixsocket");
+
+} else {
+
+print " Daemon listening at TCP/IP socket *:$unixport\n" if $verbose;
+
+#
+
+addlog($logfile, "Daemon listening at TCP/IP socket *:$unixport");
+
+}
+
+if ( -e $filepid ) {
+
+print "\n\tERROR\t PID file $filepid already exists\n\n";
+
+addlog($logfile, "Can not use PID file $filepid, already exists.");
+
+exit 1;
+
+}
+
+if ( $unixsocket ) {
+
+print " Creating UNIX socket\n" if $verbose;
+
+$socket = FCGI::OpenSocket( $unixsocket, 10 );
+
+if ( !$socket) {
+
+print " Couldn't create socket\n";
+
+addlog($logfile, "Couldn't create socket");
+
+exit 1;
+
+}
+
+print " Using UNIX socket $unixsocket\n" if $verbose;
+
+} else {
+
+print " Creating TCP/IP socket\n" if $verbose;
+
+$portnumber = ":".$unixport;
+
+$socket = FCGI::OpenSocket( $unixport, 10 );
+
+if ( !$socket ) {
+
+print " Couldn't create socket\n";
+
+addlog($logfile, "Couldn't create socket");
+
+exit 1;
+
+}
+
+print " Using port $unixport\n" if $verbose;
+
+}
+
+addlog($logfile, "Socket created");
+
+if ( ! $filepid ) {
+
+print "\n\tERROR\t PID file must declared\n"
+
+. "\tuse $0 with option -pid filename\n\n";
+
+exit 1;
+
+}
+
+print " Using PID file $filepid\n" if $verbose;
+
+addlog($logfile, "Using PID file $filepid");
+
+my $pidnumber = $$;
+
+$pidnumber > io($filepid);
+
+print " PID number $$\n" if $verbose;
+
+addlog($logfile, "PID number $pidnumber");
+
+}
+
+sub addzero {
+
+my ($date) = shift;
+
+if ($date < 10) {
+
+return "0$date";
+
+}
+
+return $date;
+
+}
+
+sub logformat {
+
+my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$iddst) = localtime(time);
+
+my $datestring;
+
+$year += 1900;
+
+$mon++;
+
+$mon = addzero($mon);
+
+$mday = addzero($mday);
+
+$min = addzero($min);
+
+$datestring = "$year-$mon-$mday $hour:$min";
+
+return($datestring);
+
+}
+
+sub addlog {
+
+my ($log_file, $log_message) = @_;
+
+my $curr_time = logformat();
+
+my $write_message = "[$curr_time] $log_message";
+
+$write_message >> io($log_file);
+
+"\n" >> io($log_file);
+
+}
+
+sub printerror {
+
+my $message = @_;
+
+print "\n Nginx FastCGI\tERROR\n"
+
+. "\t $message\n\n";
+
+exit 1;
+
+}
+
+sub usage {
+
+print "\n Nginx FastCGI \n"
+
+. "\n\tusage: $0 [-h] -S string -P int\n"
+
+. "\n\t-h\t\t: this (help) message"
+
+. "\n\t-S path\t\t: path for UNIX socket"
+
+. "\n\t-P port\t\t: port number"
+
+. "\n\t-p file\t\t: path for pid file"
+
+. "\n\t-l file\t\t: path for logfile"
+
+. "\n\n\texample: $0 -S /var/run/nginx-perl_cgi.sock -l /var/log/nginx/nginx-cfgi.log -pid /var/run/nginx-fcgi.pid\n\n";
+
+exit 1;
+
+}
+
+init;
+
+#
+
+END() { } BEGIN() { }
+
+*CORE::GLOBAL::exit = sub { die "fakeexit\nrc=".shift()."\n"; }; eval q{exit};
+
+if ($@) {
+
+exit unless $@ =~ /^fakeexit/;
+
+} ;
+
+# fork part
+
+my $pid = fork();
+
+if( $pid == 0 ) {
+
+&main;
+
+exit 0;
+
+}
+
+print " Forking worker process with PID $pid\n" if $verbose;
+
+addlog($logfile, "Forking worker process with PID $pid");
+
+print " Update PID file $filepid\n" if $verbose;
+
+addlog($logfile, "Update PID file $filepid");
+
+$pid > io($filepid);
+
+print " Worker process running.\n" if $verbose;
+
+addlog ($logfile, "Parent process $$ is exiting");
+
+exit 0;
+
+sub main {
+
+$request = FCGI::Request( \*STDIN, \*STDOUT, \*STDERR, \%req_params, $socket );
+
+if ($request) { request_loop()};
+
+FCGI::CloseSocket( $socket );
+
+}
+
+sub request_loop {
+
+while( $request->Accept() >= 0 ) {
+
+# processing any STDIN input from WebServer (for CGI-POST actions)
+
+$stdin_passthrough = '';
+
+$req_len = 0 + $req_params{'CONTENT_LENGTH'};
+
+if (($req_params{'REQUEST_METHOD'} eq 'POST') && ($req_len != 0) ){
+
+while ($req_len) {
+
+$stdin_passthrough .= getc(STDIN);
+
+$req_len--;
+
+}
+
+}
+
+# running the cgi app
+
+if ( (-x $req_params{SCRIPT_FILENAME}) &&
+
+(-s $req_params{SCRIPT_FILENAME}) &&
+
+(-r $req_params{SCRIPT_FILENAME})
+
+){
+
+foreach $key ( keys %req_params){
+
+$ENV{$key} = $req_params{$key};
+
+}
+
+if ( $verbose ) {
+
+addlog($logfile, "running $req_params{SCRIPT_FILENAME}");
+
+}
+
+# http://perldoc.perl.org/perlipc.html#Safe-Pipe-Opens
+
+#
+
+open $cgi_app, '-|', $req_params{SCRIPT_FILENAME}, $stdin_passthrough or print("Content-type: text/plain\r\n\r\n"); print "Error: CGI app returned no output - Executing $req_params{SCRIPT_FILENAME} failed !\n"; # addlog($logfile, "Error: CGI app returned no output - Executing $req_params{SCRIPT_FILENAME} failed !");
+
+if ($cgi_app) {
+
+print <$cgi_app>;
+
+close $cgi_app;
+
+}
+
+} else {
+
+print("Content-type: text/plain\r\n\r\n");
+
+print "Error: No such CGI app - $req_params{SCRIPT_FILENAME} may not exist or is not executable by this process.\n";
+
+addlog($logfile, "Error: No such CGI app - $req_params{SCRIPT_FILENAME} may not exist or is not executable by this process.");
+
+}
+
+}
+
+}
+
+################################################
+
+[root@zabbix ~]# vim /usr/local/nginx/start_perl_cgi.sh
+################################################
+
+#!/bin/bash
+
+#set -x
+
+dir=/usr/local/nginx
+
+stop ()
+
+{
+
+#pkill -f $dir/perl-fcgi.pl
+
+kill $(cat $dir/logs/perl-fcgi.pid)
+
+rm $dir/logs/perl-fcgi.pid 2>/dev/null
+
+rm $dir/logs/perl-fcgi.sock 2>/dev/null
+
+echo "stop perl-fcgi done"
+
+}
+
+start ()
+
+{
+
+rm $dir/now_start_perl_fcgi.sh 2>/dev/null
+
+chown www.www $dir/logs
+
+echo "$dir/perl-fcgi.pl -l $dir/logs/perl-fcgi.log -pid $dir/logs/perl-fcgi.pid -S $dir/logs/perl-fcgi.sock" >>$dir/now_start_perl_fcgi.sh
+
+chown www.www $dir/now_start_perl_fcgi.sh
+
+chmod u+x $dir/now_start_perl_fcgi.sh
+
+sudo -u www $dir/now_start_perl_fcgi.sh
+
+echo "start perl-fcgi done"
+
+}
+
+case $1 in
+
+stop)
+
+stop
+
+;;
+
+start)
+
+start
+
+;;
+
+restart)
+
+stop
+
+start
+
+;;
+
+esac
+
+################################################
+[root@zabbix ~]# chmod 755 /usr/local/nginx/start_perl_cgi.sh 
+[root@zabbix ~]# /usr/local/nginx/start_perl_cgi.sh start
+
+如果遇到错误Can’t locate FCGI.pm,那么执行下面的命令
+
+perl -MCPAN -e 'install FCGI'
+
+perl -MCPAN -e 'install FCGI::ProcManager'
+
+cd /usr/include; h2ph *.h */*.h
+
+第一、二条命令是给perl安装FCGI模块，第三条是注册perl能识别的头文件，然后重新执行/bin/perl-fcgi, 如果正常的话，那么执行：
+
+netstat -tunlp
+
+列表中应该出现
+tcp        0      0 127.0.0.1:10081             0.0.0.0:*                   LISTEN      5640/perl
+启用分发器
+
+/bin/perl-fcgi > /dev/null 2>&1 &
+将其写入rc.local
+echo "/bin/perl-fcgi > /dev/null 2>&1 &" >> /etc/rc.local
+
+#查看perl-fcgi.sock文件是否生成，如果没有生成文件，请检查以上步骤，重新编译相关模块
+[root@zabbix ~]# cd /usr/local/nginx/logs/
+[root@zabbix logs]# ls
+access.log  error.log  nginx.pid  perl-fcgi.log  perl-fcgi.pid  perl-fcgi.sock
+
+3、添加perl_fcgi.conf文件
+[root@zabbix ~]# cd /usr/local/nginx/conf/
+[root@zabbix conf]# vim perl_fcgi.conf
+
+location ~ .*\.(pl|cgi)?$
+
+{
+
+gzip off;
+
+fastcgi_pass unix:/usr/local/nginx/logs/perl-fcgi.sock;
+
+fastcgi_index index.cgi;
+
+fastcgi_param GATEWAY_INTERFACE CGI/1.1;
+
+fastcgi_param SERVER_SOFTWARE nginx;
+
+fastcgi_param QUERY_STRING $query_string;
+
+fastcgi_param REQUEST_METHOD $request_method;
+
+fastcgi_param CONTENT_TYPE $content_type;
+
+fastcgi_param CONTENT_LENGTH $content_length;
+
+fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+
+fastcgi_param SCRIPT_NAME $fastcgi_script_name;
+
+fastcgi_param REQUEST_URI $request_uri;
+
+fastcgi_param DOCUMENT_URI $document_uri;
+
+fastcgi_param DOCUMENT_ROOT $document_root;
+
+fastcgi_param SERVER_PROTOCOL $server_protocol;
+
+fastcgi_param REMOTE_ADDR $remote_addr;
+
+fastcgi_param REMOTE_PORT $remote_port;
+
+fastcgi_param SERVER_ADDR $server_addr;
+
+fastcgi_param SERVER_PORT $server_port;
+
+fastcgi_param SERVER_NAME $server_name;
+
+fastcgi_read_timeout 60;
+
+}
+
+4、修改nginx配置文件/usr/local/nginx/conf/nginx.conf
+
+[root@zabbix conf]# cp /usr/local/nginx/conf/nginx.conf /usr/local/nginx/conf/nginx.conf-bak #备份原文件
+[root@zabbix conf]# vi /usr/local/nginx/conf/nginx.conf #编辑修改，在server段添加include perlfcgi.conf;
+.......
+server
+
+{
+
+listen 80;
+
+#server_name localhost;
+
+index index.php default.php index.html index.htm default.html default.htm ;
+
+location ~ .*\.(php|php5)?$
+
+{
+
+fastcgi_pass 127.0.0.1:9000;
+
+fastcgi_index index.php;
+
+include fastcgi.conf;
+
+}
+
+include perl_fcgi.conf;
+....
+
+5、测试nginx支持.cgi
+
+[root@zabbix ~]# vim /usr/local/nginx/html/perlinfo.cgi
+
+########################################
+
+#!/usr/bin/perl
+
+print "Content-type: text/html\n\n";
+
+#Location of Perl
+
+$output = `whereis perl`;
+
+@locations = split(" ",$output);
+
+foreach $line (@locations)
+
+{
+
+$whereperl .= "$line<br>";
+
+}
+
+#Location of Sendmail
+
+$output = `whereis sendmail`;
+
+@locations = split(" ",$output);
+
+foreach $line (@locations)
+
+{
+
+$wheresendmail .= "$line<br>";
+
+}
+
+#Location of Current Directory
+
+$currentdirectory = `pwd`;
+
+#Perl Variables
+
+$perlversion = $];
+
+#Perl Os
+
+$perlos = $^O;
+
+#Module Paths
+
+foreach $line (@INC)
+
+{
+
+$modulepaths .= "$line<br>";
+
+}
+
+#Environment Variables
+
+$environment = qq~
+
+<table width="100%" border="1" cellspacing="0" cellpadding="2" bordercolor="#000000">
+
+<tr>
+
+<td colspan="2" bgcolor="#0033CC">
+
+<div align="center" class="tabletitle">Environment Variables</div>
+
+</td>
+
+</tr>
+
+~;
+
+@allkeys = keys(%ENV);
+
+foreach $key (@allkeys)
+
+{
+
+$value = $ENV{$key};
+
+if ($value eq "") {$value = "-";}
+
+$environment .= qq~
+
+<tr>
+
+<td width="150" class="tableitems">$key</td>
+
+<td class="tablevalue">$value</td>
+
+</tr>
+
+~;
+
+}
+
+$environment .= qq~
+
+</table>
+
+~;
+
+$documentroot = $ENV{'DOCUMENT_ROOT'};
+
+if ($documentroot ne "")
+
+{
+
+@lines = `du -c -k $documentroot`;
+
+$lastline = @lines-1;
+
+($diskusage) = split/[\t| ]/,$lines[$lastline];
+
+}
+
+#Server Software
+
+$serverip = $ENV{'SERVER_ADDR'};
+
+$servername = $ENV{'SERVER_NAME'};
+
+$serverport = $ENV{'SERVER_PORT'};
+
+$serversoftware = $ENV{'SERVER_SOFTWARE'};
+
+$serveruptime =`uptime`;
+
+#Localtime
+
+($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+
+@months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec");
+
+$date = sprintf("%02d-%s-%04d",$mday,$months[$mon],$year+1900);
+
+$time = sprintf("%02d:%02d:%02d",$hour,$min,$sec);
+
+$localtime = "$date, $time";
+
+#GMTtime
+
+($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = gmtime(time);
+
+@months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec");
+
+$date = sprintf("%02d-%s-%04d",$mday,$months[$mon],$year+1900);
+
+$time = sprintf("%02d:%02d:%02d",$hour,$min,$sec);
+
+$gmttime = "$date, $time";
+
+print qq~
+
+<html>
+
+<head>
+
+<title>Perlonline.com - Perlinfo.cgi</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+
+<style type="text/css">
+
+<!--
+
+.tabletitle { font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; background-position: center; color: #FFFFFF}
+
+.tableitems { font-family: Arial, Helvetica, sans-serif; font-size: 12px}
+
+.tablevalue { font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: bolder}
+
+-->
+
+</style>
+
+</head>
+
+<body bgcolor="#FFFFFF" text="#000000">
+
+<table width="100%" border="1" cellpadding="2" cellspacing="0" bordercolor="#000000">
+
+<tr bgcolor="#0033CC">
+
+<td colspan="2" class="tabletitle">
+
+<div align="center">Server Information</div>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Name</td>
+
+<td class="tablevalue">$servername</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">IP</td>
+
+<td class="tablevalue">$serverip</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Listing Port</td>
+
+<td class="tablevalue">$serverport</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Document Root</td>
+
+<td class="tablevalue">$documentroot</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Disk Usage by Root</td>
+
+<td class="tablevalue">$diskusage Kb</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Software's Installed</td>
+
+<td class="tablevalue">$serversoftware</td>
+
+</tr>
+
+</table>
+
+<br>
+
+<table width="100%" border="1" cellspacing="0" cellpadding="2" bordercolor="#000000">
+
+<tr bgcolor="#0033CC">
+
+<td colspan="2" class="tabletitle">
+
+<div align="center">Perl Information</div>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Perl version</td>
+
+<td class="tablevalue">$perlversion</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Compiled For</td>
+
+<td class="tablevalue">$perlos</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Module Paths</td>
+
+<td class="tablevalue">$modulepaths</td>
+
+</tr>
+
+</table>
+
+<br>
+
+<table width="100%" border="1" bordercolor="#000000" cellpadding="2" cellspacing="0">
+
+<tr bgcolor="#0033CC">
+
+<td colspan="2" class="tabletitle">
+
+<div align="center">Location of Important Unix Programs</div>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Perl</td>
+
+<td class="tablevalue">$whereperl</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Sendmail</td>
+
+<td class="tablevalue">$wheresendmail</td>
+
+</tr>
+
+</table>
+
+<br>
+
+<table width="100%" border="1" cellspacing="0" cellpadding="2" bordercolor="#000000">
+
+<tr bgcolor="#0033CC">
+
+<td colspan="2" class="tabletitle">
+
+<div align="center">Time</div>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Server Time (Local)</td>
+
+<td class="tablevalue">$localtime</td>
+
+</tr>
+
+<tr>
+
+<td class="tableitems" width="150" valign="top">Server Time (GMT)</td>
+
+<td class="tablevalue">$gmttime</td>
+
+</tr>
+
+</table>
+
+<br>
+
+$environment
+
+<p align="center" class="tablevalue">&nbsp;</p>
+
+<p align="center" class="tablevalue">All rights Reserved 2001. <a href="http://www.perlonline.biz">Perlonline.biz</a></p>
+
+</body>
+
+</html>
+
+~;
+
+########################################
+
+2、[root@zabbix conf]# vim /usr/local/nginx/html/test.cgi
+#!/usr/bin/perl
+
+print "Content-type: text/html\n\n";
+
+print "<html><body>Hello, world.</body></html>";
+
+[root@zabbix conf]# chown www.www -R /usr/local/nginx/html/
+[root@zabbix conf]# chmod 744 /usr/local/nginx/html/perlinfo.cgi
+[root@zabbix conf]# chmod 744 /usr/local/nginx/html/test.cgi
+
+3、最后注意重启下nginx服务
+[root@zabbix conf]# service  nginx restart
+Stopping nginx:                                            [FAILED]
+Starting nginx:                                            [  OK  ]
+
+4、在页面中输入http://10.10.9.221/perlinfo.cgi
+   在页面中输入http://10.10.9.221/test.cgi
+
+
+
