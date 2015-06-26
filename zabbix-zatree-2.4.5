@@ -1,0 +1,54 @@
+zatree-2.4.5配置
+1、下载文件
+[root@rzs ~]# git clone https://github.com/spide4k/zatree.git zatree  
+[root@rzs ~]# ls zatree/
+README.md  zabbix-2.0.x  zabbix-2.2.x  zabbix-2.4.5 
+ 
+2、将下载下来的zatree与zabbix整合包复制至zabbix web目录/var/www/html/下
+[root@rzs ~]# cd /root/zatree/
+[root@rzs zatree]# ls
+README.md  zabbix-2.0.x  zabbix-2.2.x  zabbix-2.4.5
+[root@rzs zatree]# cd zabbix-2.4.5/
+[root@rzs zabbix-2.4.5]# ls
+README.md  zatree-zabbix-2.4.5  zatree-zabbix-2.4.5.tar.gz
+[root@rzs ~]# cp -ar zatree-zabbix-2.4.5.tar.gz /var/www/html/
+
+3、解压zatree-zabbix-2.4.5.tar.gz
+[root@rzs html]# tar -zxvf zatree-zabbix-2.4.5.tar.gz
+
+4、移走原有的zabbix web目录
+[root@rzs html]# mv zabbix/   zabbix.old/
+[root@rzs html]# ls
+wordpress  zabbix.old  zatree-zabbix-2.4.5  zatree-zabbix-2.4.5.tar.gz
+[root@rzs html]# mv zatree-zabbix-2.4.5  zabbix
+
+5、zabbix数据库 拷贝源目录的conf/zabbix.conf.php到新目录覆盖，如果原来有添加字体也顺手拷贝过来
+[root@rzs html]# cp -ar zabbix.old/conf/zabbix.conf.php zabbix/conf/
+cp: overwrite `zabbix/conf/zabbix.conf.php'? y
+[root@rzs html]# ls -lh /var/www/html/zabbix/conf/
+total 12K
+-rw-r--r-- 1 root   root   1.1K May 27 10:58 maintenance.inc.php
+-rw-r--r-- 1 apache apache  474 Apr  5 14:12 zabbix.conf.php
+-rw-r--r-- 1 root   root    429 May 27 10:58 zabbix.conf.php.example
+
+6、支持web interface,修改配置文件 zatree/zabbix_config.php
+[root@rzs html]# vim zabbix/zatree/zabbix_config.php 
+.......
+  2 global $zabbix_api_config;
+  3 
+  4 $zabbix_api_config=array(
+  5  'api_url'=>'api_jsonrpc.php',
+  6  'user'=>'admin',        //web登陆的用户名
+  7  'password'=>'zabbix',     //web登录的密码
+  8  'graph_url'=>'zabbix_chart.php',   
+  9  'http_user'=>'admin',     //https web登录的用户名
+ 10  'http_password'=>'zabbix'   //https web登录的用户名
+..........
+
+7、重启httpd、zabbix_server 服务
+[root@rzs html]# /etc/init.d/httpd restart
+Stopping httpd:                                            [  OK  ]
+Starting httpd:                                            [  OK  ]
+[root@rzs html]# /etc/init.d/zabbix_server restart
+Shutting down zabbix_server:                               [  OK  ]
+Starting zabbix_server:                                    [  OK  ]
