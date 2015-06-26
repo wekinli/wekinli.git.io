@@ -1,0 +1,16 @@
+svnadmin是一个用来监控和修改Subversio版本库的管理工具，它可以通过路径直接访问版本库，也可以结合apache通过URL访问。
+1、svnadmin switches
+--bdb-log-keep：（Berkeley DB特定）关闭数据库日志自动删除功能
+--bdb-txn-nosync：（Berkeley DB特定）当提交数据库事务时关闭fsync
+--bypass-hooks：绕过版本库钩子系统
+--clean-logs：删除不适用berkeley DB日志
+--force-uuid：缺省情况下，当版本库加载已包含修订版本的数据时，svnadmin会使用来自流中UUID,这个选项会导致忽略UUID
+--incremental：导出一个修订版本针对前一个修订版本的区别，而不是通常的完全结果。
+--parent-dir DIR： 当加载一个转储文件时，每次新加修订版本之前运行版本库的pre-commit钩子。如果钩子失败，终止提交并中断加载进程。
+--revision (-r) ARG指定一个操作的修订版本
+--quiet
+不显示通常的过程—只显示错误。
+--use-post-commit-hook
+当导入使用一个转储文件时，在每次新的修订版本产生时运行版本库post-commit钩子。
+--use-pre-commit-hook
+当加载一个转储文件时，每次新加修订版本之前运行版本库的pre-commit钩子。如果钩子失败，终止提交并中断加载进程。
