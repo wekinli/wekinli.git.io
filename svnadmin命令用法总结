@@ -1,4 +1,4 @@
-svnadmin是一个用来监控和修改Subversio版本库的管理工具，它可以通过路径直接访问版本库，也可以结合apache通过URL访问。
+svnadmin是一个用来监控和修改Subversio版本库的管理工具，它只能通过路径本地直接访问版本库，
 1、svnadmin switches
 --bdb-log-keep：（Berkeley DB特定）关闭数据库日志自动删除功能
 --bdb-txn-nosync：（Berkeley DB特定）当提交数据库事务时关闭fsync
@@ -7,10 +7,40 @@ svnadmin是一个用来监控和修改Subversio版本库的管理工具，它可
 --force-uuid：缺省情况下，当版本库加载已包含修订版本的数据时，svnadmin会使用来自流中UUID,这个选项会导致忽略UUID
 --incremental：导出一个修订版本针对前一个修订版本的区别，而不是通常的完全结果。
 --parent-dir DIR： 当加载一个转储文件时，每次新加修订版本之前运行版本库的pre-commit钩子。如果钩子失败，终止提交并中断加载进程。
---revision (-r) ARG指定一个操作的修订版本
---quiet
-不显示通常的过程—只显示错误。
---use-post-commit-hook
-当导入使用一个转储文件时，在每次新的修订版本产生时运行版本库post-commit钩子。
---use-pre-commit-hook
-当加载一个转储文件时，每次新加修订版本之前运行版本库的pre-commit钩子。如果钩子失败，终止提交并中断加载进程。
+--revision (-r)：ARG指定一个操作的修订版本
+--quiet：不显示通常的过程—只显示错误。
+--use-post-commit-hook：当导入使用一个转储文件时，在每次新的修订版本产生时运行版本库post-commit钩子。
+--use-pre-commit-hook：当加载一个转储文件时，每次新加修订版本之前运行版本库的pre-commit钩子。如果钩子失败，终止提交并中断加载进程。
+2、svnadmin create — 创建一个新的空的版本库。在提供的路径上创建一个新的空的版本库，如果提供的目录不存在，它会为你创建。
+对于Subversion 1.2，svnadmin缺省使用fsfs文件系统后端创建版本库。
+选项：
+--bdb-txn-nosync
+--bdb-log-keep
+--config-dir DIR
+--fs-type TYPE
+例子
+创建一个版本库就是这样简单：
+$ svnadmin create /usr/local/svn/repos
+在Subversion 1.0，一定会创建一个Berkeley DB版本库，在Subversion 1.1，Berkeley DB版本库是缺省类型，但是一个FSFS版本库也是可以创建，
+使用--fs-type选项：
+$ svnadmin create /usr/local/svn/repos --fs-type fsfs
+3、svnadmin dump — 将文件系统的内容转储到标准输出
+格式：svnadmin dump REPOS_PATH [-r LOWER[:UPPER]] [--incremental]
+例子
+转储整个版本库：
+$ svnadmin dump /usr/local/svn/repos
+SVN-fs-dump-format-version: 1
+Revision-number: 0
+* Dumped revision 0.
+Prop-content-length: 56
+Content-length: 56
+…
+从版本库增量转储一个单独的事务：
+$ svnadmin dump /usr/local/svn/repos -r 21 --incremental 
+* Dumped revision 21.
+SVN-fs-dump-format-version: 1
+Revision-number: 21
+Prop-content-length: 101
+Content-length: 101
+…
+
